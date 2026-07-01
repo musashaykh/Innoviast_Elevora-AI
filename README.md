@@ -69,7 +69,7 @@ npm run start
 The app is deployed on Vercel. Add the live Vercel URL here:
 
 ```bash
-https://your-vercel-deployment-url.vercel.app
+https://innoviast-elevora-ai.vercel.app/
 ```
 
 Configure these environment variables in Vercel before deploying:
