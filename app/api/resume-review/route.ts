@@ -53,74 +53,59 @@ function isSupportedFile(file: File) {
   );
 }
 
-async function extractPdfWithPdfParse(buffer: Buffer) {
-  const { PDFParse } = await import("pdf-parse");
-  const parser = new PDFParse({ data: buffer });
+async function extractPdfWithPdf2Json(buffer: Buffer) {
+  const { default: PDFParser } = await import("pdf2json");
 
-  try {
-    const result = await parser.getText();
-    return result.text;
-  } finally {
-    await parser.destroy();
-  }
-}
+  return new Promise<string>((resolve, reject) => {
+    const parser = new PDFParser(null, true);
+    let settled = false;
 
-async function extractPdfWithPdfJs(buffer: Buffer) {
-  const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
-  const loadingTask = pdfjs.getDocument({
-    data: new Uint8Array(buffer),
-    disableFontFace: true,
-    useSystemFonts: true,
-  });
-  const document = await loadingTask.promise;
+    const complete = (callback: () => void) => {
+      if (settled) {
+        return;
+      }
 
-  try {
-    const pageTexts: string[] = [];
+      settled = true;
+      try {
+        callback();
+      } finally {
+        parser.destroy();
+      }
+    };
 
-    for (let pageNumber = 1; pageNumber <= document.numPages; pageNumber += 1) {
-      const page = await document.getPage(pageNumber);
-      const textContent = await page.getTextContent();
-      const pageText = textContent.items
-        .map((item) => ("str" in item ? item.str : ""))
-        .filter(Boolean)
-        .join(" ");
+    parser.on("pdfParser_dataError", (errorData) => {
+      const error =
+        errorData instanceof Error
+          ? errorData
+          : errorData.parserError;
 
-      pageTexts.push(pageText);
+      complete(() => reject(error));
+    });
+
+    parser.on("pdfParser_dataReady", () => {
+      complete(() => resolve(parser.getRawTextContent()));
+    });
+
+    try {
+      parser.parseBuffer(buffer, 0);
+    } catch (error) {
+      complete(() => reject(error));
     }
-
-    return pageTexts.join("\n\n");
-  } finally {
-    await loadingTask.destroy();
-  }
+  });
 }
 
 async function extractPdfText(buffer: Buffer, fileName: string) {
-  const failures: string[] = [];
+  console.info(`Resume PDF extraction using pdf2json: ${fileName}`);
 
   try {
-    const text = await extractPdfWithPdfParse(buffer);
-    console.info(`Resume PDF extracted with pdf-parse: ${fileName}, characters=${text.trim().length}`);
+    const text = await extractPdfWithPdf2Json(buffer);
+    console.info(`Resume PDF extracted with pdf2json: ${fileName}, characters=${text.trim().length}`);
     return text;
   } catch (error) {
     const message = getErrorMessage(error);
-    failures.push(`pdf-parse failed: ${message}`);
-    console.error(`Resume PDF pdf-parse failed for ${fileName}:`, error);
+    console.error(`Resume PDF pdf2json extraction failed for ${fileName}:`, error);
+    throw new ResumeExtractionError("PDF text extraction failed.", `pdf2json failed: ${message}`);
   }
-
-  try {
-    const text = await extractPdfWithPdfJs(buffer);
-    console.info(`Resume PDF extracted with pdfjs-dist fallback: ${fileName}, characters=${text.trim().length}`);
-    return text;
-  } catch (error) {
-    const message = getErrorMessage(error);
-    failures.push(`pdfjs-dist fallback failed: ${message}`);
-    console.error(`Resume PDF pdfjs-dist fallback failed for ${fileName}:`, error);
-  }
-
-  throw new ResumeExtractionError(
-    "PDF text extraction failed.",
-    failures.join(" | "),
-  );
 }
 
 async function extractText(file: File) {
