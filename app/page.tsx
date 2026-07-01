@@ -4,6 +4,7 @@ import { Footer } from "@/components/footer";
 import { Hero } from "@/components/hero";
 import { CareerCategories, CtaSection, WhyChoose } from "@/components/landing-sections";
 import { Navbar } from "@/components/navbar";
+import { ResumeReview } from "@/components/resume-review";
 
 export default function Home() {
   return (
@@ -14,6 +15,7 @@ export default function Home() {
         <Features />
         <WhyChoose />
         <CareerCategories />
+        <ResumeReview />
         <ChatContainer />
         <CtaSection />
       </main>
