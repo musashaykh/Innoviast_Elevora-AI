@@ -55,7 +55,7 @@ GROQ_MODEL=llama-3.3-70b-versatile
 npm run dev
 ```
 
-Open `http://localhost:3000`.
+For local development, Next.js will print the local preview URL in the terminal.
 
 ## Production Build
 
@@ -66,7 +66,13 @@ npm run start
 
 ## Deployment
 
-The app is ready for Vercel deployment. Configure these environment variables in Vercel before deploying:
+The app is deployed on Vercel. Add the live Vercel URL here:
+
+```bash
+https://your-vercel-deployment-url.vercel.app
+```
+
+Configure these environment variables in Vercel before deploying:
 
 - `GROQ_API_KEY`
 - `GROQ_MODEL`
