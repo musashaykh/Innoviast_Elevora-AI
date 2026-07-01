@@ -75,19 +75,34 @@ The browser never calls Groq directly. All AI requests go through the Next.js ro
 
 ## Screenshots
 
-Add screenshots after the deployed UI is captured:
+### Home
 
-- Landing page
-- Chat interface
-- Mobile layout
-- Dark theme
+![Home](public/screenshots/home.png)
+
+### Features
+
+![Features](public/screenshots/features.png)
+
+### Careers
+
+![Careers](public/screenshots/careers.png)
+
+### Chatbot
+
+![Chatbot](public/screenshots/chatbot1.png)
+
+### Resume Analyzer
+
+![Resume Analyzer](public/screenshots/resume_analyzer.png)
+
+### Error Handling
+
+![Error Handling](public/screenshots/errorhandling.png)
 
 ## Future Improvements
 
 - Authentication
 - Persistent saved conversations
-- Resume analyzer
-- ATS checker
 - Interview simulator
 - Career assessment quiz
 - Dashboard
