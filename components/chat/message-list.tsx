@@ -18,7 +18,7 @@ export function MessageList({ messages, isLoading }: MessageListProps) {
   }, [messages, isLoading]);
 
   return (
-    <div className="flex min-h-[430px] flex-1 flex-col gap-5 overflow-y-auto px-4 py-5 sm:px-5">
+    <div className="flex min-h-[520px] flex-1 flex-col gap-5 overflow-y-auto bg-background/40 px-4 py-5 sm:px-5">
       {messages.map((message) => (
         <Message key={message.id} message={message} />
       ))}

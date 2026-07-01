@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertCircle, RotateCcw } from "lucide-react";
+import { AlertCircle, RotateCcw, Sparkles } from "lucide-react";
 import { ChatHeader } from "@/components/chat/chat-header";
 import { ChatInput } from "@/components/chat/chat-input";
 import { MessageList } from "@/components/chat/message-list";
@@ -21,15 +21,25 @@ export function ChatContainer() {
   } = useChat();
 
   return (
-    <section id="chat" className="mx-auto max-w-5xl px-4 py-20 sm:px-6 lg:px-8">
-      <div className="overflow-hidden rounded-lg border bg-card shadow-lg">
+    <section id="chat" className="mx-auto max-w-6xl px-4 py-20 sm:px-6 lg:px-8">
+      <div className="mb-8 text-center">
+        <div className="mb-4 inline-flex items-center gap-2 rounded-full border bg-card px-3 py-1 text-sm font-medium text-muted-foreground shadow-sm">
+          <Sparkles size={15} className="text-primary" />
+          AI career workspace
+        </div>
+        <h2 className="text-3xl font-semibold tracking-normal sm:text-4xl">Ask, plan, revise, and prepare.</h2>
+        <p className="mx-auto mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">
+          Get polished career guidance, resume feedback, structured roadmaps, interview preparation, and resource recommendations.
+        </p>
+      </div>
+      <div className="overflow-hidden rounded-lg border bg-card/85 shadow-2xl backdrop-blur-xl">
         <ChatHeader onClear={clearChat} hasMessages={hasMessages} />
         {!hasMessages ? (
-          <div className="space-y-6 px-4 py-8 sm:px-5">
-            <div>
-              <h2 className="text-2xl font-semibold tracking-normal">Start with a career question</h2>
+          <div className="space-y-6 bg-[linear-gradient(180deg,rgba(37,99,235,0.06),transparent_45%)] px-4 py-8 sm:px-5">
+            <div className="mx-auto max-w-2xl text-center">
+              <h3 className="text-2xl font-semibold tracking-normal">Start with a high-impact prompt</h3>
               <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                Choose a prompt or ask about careers, resumes, interviews, certifications, portfolios, or learning roadmaps.
+                Choose a card or ask about careers, resumes, interviews, certifications, portfolios, or learning roadmaps.
               </p>
             </div>
             <SuggestedPrompts onSelect={(prompt) => void sendMessage(prompt)} disabled={isLoading} />

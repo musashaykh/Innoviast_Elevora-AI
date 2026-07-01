@@ -11,6 +11,8 @@ export const APP_CONFIG = {
 export const NAV_LINKS = [
   { label: "Home", href: "#home" },
   { label: "Features", href: "#features" },
+  { label: "Careers", href: "#careers" },
+  { label: "Chat", href: "#chat" },
   { label: "About", href: "#about" },
   { label: "GitHub", href: "https://github.com/" },
 ] as const;

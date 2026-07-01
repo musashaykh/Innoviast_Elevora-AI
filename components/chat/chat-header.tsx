@@ -1,4 +1,4 @@
-import { Bot, Trash2 } from "lucide-react";
+import { Bot, ShieldCheck, Trash2 } from "lucide-react";
 
 interface ChatHeaderProps {
   onClear: () => void;
@@ -7,9 +7,9 @@ interface ChatHeaderProps {
 
 export function ChatHeader({ onClear, hasMessages }: ChatHeaderProps) {
   return (
-    <div className="flex items-center justify-between gap-4 border-b px-4 py-4 sm:px-5">
+    <div className="flex items-center justify-between gap-4 border-b bg-card/90 px-4 py-4 backdrop-blur-xl sm:px-5">
       <div className="flex items-center gap-3">
-        <div className="flex h-11 w-11 items-center justify-center rounded-md bg-primary text-primary-foreground">
+        <div className="flex h-11 w-11 items-center justify-center rounded-md bg-primary text-primary-foreground shadow-sm">
           <Bot size={22} />
         </div>
         <div>
@@ -20,7 +20,10 @@ export function ChatHeader({ onClear, hasMessages }: ChatHeaderProps) {
               Online
             </span>
           </div>
-          <p className="text-sm text-muted-foreground">Career Guidance Assistant</p>
+          <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
+            <ShieldCheck size={14} />
+            Career Guidance Assistant
+          </p>
         </div>
       </div>
       <button

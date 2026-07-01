@@ -4,8 +4,10 @@ import ReactMarkdown from "react-markdown";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { oneLight, oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
 import { useTheme } from "next-themes";
+import { Bot, UserRound } from "lucide-react";
 import type { ChatMessage } from "@/types/chat";
 import { cn } from "@/lib/utils";
+import { AssistantInsights } from "@/components/chat/assistant-insights";
 import { CopyButton } from "@/components/chat/copy-button";
 
 interface MessageProps {
@@ -19,13 +21,18 @@ export function Message({ message }: MessageProps) {
 
   return (
     <article className={cn("flex gap-3", isUser ? "justify-end" : "justify-start")}>
-      <div className={cn("max-w-[88%] sm:max-w-[78%]", isUser && "order-2")}>
+      {!isUser && (
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-sm">
+          <Bot size={18} />
+        </div>
+      )}
+      <div className={cn("max-w-[90%] sm:max-w-[82%]", isUser && "order-2")}>
         <div
           className={cn(
             "rounded-lg px-4 py-3 text-sm leading-6 shadow-sm",
             isUser
-              ? "bg-primary text-primary-foreground"
-              : "border bg-card text-card-foreground",
+              ? "rounded-tr-sm bg-primary text-primary-foreground"
+              : "rounded-tl-sm border bg-card text-card-foreground",
           )}
         >
           {isUser ? (
@@ -80,9 +87,15 @@ export function Message({ message }: MessageProps) {
               {message.content}
             </ReactMarkdown>
           )}
+          {!isUser && <AssistantInsights content={message.content} />}
         </div>
         {!isUser && <div className="mt-2"><CopyButton content={message.content} /></div>}
       </div>
+      {isUser && (
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-500 text-white shadow-sm">
+          <UserRound size={18} />
+        </div>
+      )}
     </article>
   );
 }
