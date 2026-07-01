@@ -59,6 +59,39 @@ function scoreColor(score: number) {
   return "text-rose-600 dark:text-rose-300";
 }
 
+function extractHtmlError(html: string) {
+  const title = html.match(/<title>(.*?)<\/title>/i)?.[1]?.trim();
+
+  if (title) {
+    return title.replace(/\s+/g, " ");
+  }
+
+  return "The server returned an HTML error page instead of JSON.";
+}
+
+async function parseResumeReviewResponse(response: Response): Promise<ResumeReviewResponse> {
+  const contentType = response.headers.get("content-type") ?? "";
+  const body = await response.text();
+
+  if (!contentType.includes("application/json")) {
+    return {
+      success: false,
+      error: `${response.status} ${response.statusText}: ${extractHtmlError(body)}`,
+      timestamp: new Date().toISOString(),
+    };
+  }
+
+  try {
+    return JSON.parse(body) as ResumeReviewResponse;
+  } catch {
+    return {
+      success: false,
+      error: "The server returned invalid JSON for the resume review.",
+      timestamp: new Date().toISOString(),
+    };
+  }
+}
+
 function FeedbackCard({
   title,
   items,
@@ -172,9 +205,13 @@ export function ResumeReview() {
         method: "POST",
         body: formData,
       });
-      const data = (await response.json()) as ResumeReviewResponse;
+      const data = await parseResumeReviewResponse(response);
 
-      if (!response.ok || !data.success) {
+      if (!response.ok) {
+        throw new Error(data.success === false ? data.error : `Resume review failed with status ${response.status}.`);
+      }
+
+      if (!data.success) {
         throw new Error(data.success === false ? data.error : "Resume review failed.");
       }
 

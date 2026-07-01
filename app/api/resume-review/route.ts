@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import mammoth from "mammoth";
-import { PDFParse } from "pdf-parse";
 import { getGroqClient, getGroqModel } from "@/lib/groq";
 import type { ResumeAnalysis, ResumeReviewResponse } from "@/types/api";
 
@@ -9,6 +8,7 @@ export const runtime = "nodejs";
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
 const MIN_TEXT_LENGTH = 300;
 const MAX_TEXT_LENGTH = 15000;
+const REQUEST_TIMEOUT_MS = 45000;
 const GENERIC_ERROR = "Sorry, I couldn't review this resume. Please try again.";
 const ALLOWED_TYPES = new Set([
   "application/pdf",
@@ -47,6 +47,7 @@ async function extractText(file: File) {
   const lowerName = file.name.toLowerCase();
 
   if (file.type === "application/pdf" || lowerName.endsWith(".pdf")) {
+    const { PDFParse } = await import("pdf-parse");
     const parser = new PDFParse({ data: buffer });
 
     try {
@@ -139,6 +140,22 @@ ${resumeText.slice(0, MAX_TEXT_LENGTH)}
 }
 
 export async function POST(request: NextRequest) {
+  try {
+    return await handlePost(request);
+  } catch (error) {
+    if (process.env.NODE_ENV !== "production") {
+      console.error("Unhandled resume review error:", error instanceof Error ? error.message : "Unknown error");
+    }
+
+    return errorResponse(GENERIC_ERROR, 500);
+  }
+}
+
+export function GET() {
+  return errorResponse("Method not allowed. Upload a resume with POST.", 405);
+}
+
+async function handlePost(request: NextRequest) {
   let formData: FormData;
 
   try {
@@ -151,6 +168,10 @@ export async function POST(request: NextRequest) {
 
   if (!(file instanceof File)) {
     return errorResponse("Please upload a resume file.", 400);
+  }
+
+  if (file.size === 0) {
+    return errorResponse("The uploaded resume file is empty.", 400);
   }
 
   if (!isSupportedFile(file)) {
@@ -173,24 +194,32 @@ export async function POST(request: NextRequest) {
     return errorResponse("The extracted resume text is too short for a useful ATS review.", 422);
   }
 
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
   try {
     const groq = getGroqClient();
-    const completion = await groq.chat.completions.create({
-      model: getGroqModel(),
-      temperature: 0.2,
-      max_tokens: 1200,
-      response_format: { type: "json_object" },
-      messages: [
-        {
-          role: "system",
-          content: "You are a professional ATS resume analyst. Respond only with valid JSON.",
-        },
-        {
-          role: "user",
-          content: buildPrompt(extractedText),
-        },
-      ],
-    });
+    const completion = await groq.chat.completions.create(
+      {
+        model: getGroqModel(),
+        temperature: 0.2,
+        max_tokens: 1200,
+        response_format: { type: "json_object" },
+        messages: [
+          {
+            role: "system",
+            content: "You are a professional ATS resume analyst. Respond only with valid JSON.",
+          },
+          {
+            role: "user",
+            content: buildPrompt(extractedText),
+          },
+        ],
+      },
+      {
+        signal: controller.signal,
+      },
+    );
 
     const content = completion.choices[0]?.message?.content;
 
@@ -217,10 +246,16 @@ export async function POST(request: NextRequest) {
       return errorResponse("AI service is not configured. Please add GROQ_API_KEY.", 500);
     }
 
+    if (error instanceof Error && error.name === "AbortError") {
+      return errorResponse("The resume review timed out. Please try again with a shorter resume.", 504);
+    }
+
     if (error instanceof SyntaxError) {
       return errorResponse("The AI response could not be parsed. Please try again.", 502);
     }
 
     return errorResponse(GENERIC_ERROR, 500);
+  } finally {
+    clearTimeout(timeoutId);
   }
 }

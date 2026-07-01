@@ -140,6 +140,10 @@ export async function POST(request: NextRequest) {
   }
 }
 
+export function GET() {
+  return errorResponse("Method not allowed. Send chat messages with POST.", 405);
+}
+
 function windowlessSetTimeout(callback: () => void, delay: number) {
   return setTimeout(callback, delay);
 }
