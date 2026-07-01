@@ -16,6 +16,13 @@ const ALLOWED_TYPES = new Set([
   "text/plain",
 ]);
 
+class ResumeExtractionError extends Error {
+  constructor(message: string, public readonly detail: string) {
+    super(message);
+    this.name = "ResumeExtractionError";
+  }
+}
+
 function jsonResponse(body: ResumeReviewResponse, status: number) {
   return NextResponse.json(body, { status });
 }
@@ -31,6 +38,10 @@ function errorResponse(error: string, status: number) {
   );
 }
 
+function getErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error);
+}
+
 function isSupportedFile(file: File) {
   const lowerName = file.name.toLowerCase();
 
@@ -42,31 +53,136 @@ function isSupportedFile(file: File) {
   );
 }
 
+async function extractPdfWithPdfParse(buffer: Buffer) {
+  const { PDFParse } = await import("pdf-parse");
+  const parser = new PDFParse({ data: buffer });
+
+  try {
+    const result = await parser.getText();
+    return result.text;
+  } finally {
+    await parser.destroy();
+  }
+}
+
+interface PdfJsTextItem {
+  str?: unknown;
+}
+
+interface PdfJsPage {
+  getTextContent: () => Promise<{ items: PdfJsTextItem[] }>;
+}
+
+interface PdfJsDocument {
+  numPages: number;
+  getPage: (pageNumber: number) => Promise<PdfJsPage>;
+  destroy: () => Promise<void>;
+}
+
+interface PdfJsLoadingTask {
+  promise: Promise<PdfJsDocument>;
+}
+
+interface PdfJsModule {
+  getDocument: (options: {
+    data: Uint8Array;
+    disableFontFace: boolean;
+    isEvalSupported: boolean;
+    useSystemFonts: boolean;
+  }) => PdfJsLoadingTask;
+}
+
+async function extractPdfWithPdfJs(buffer: Buffer) {
+  const pdfjs = (await import("pdfjs-dist/legacy/build/pdf.mjs")) as PdfJsModule;
+  const loadingTask = pdfjs.getDocument({
+    data: new Uint8Array(buffer),
+    disableFontFace: true,
+    isEvalSupported: false,
+    useSystemFonts: true,
+  });
+  const document = await loadingTask.promise;
+
+  try {
+    const pageTexts: string[] = [];
+
+    for (let pageNumber = 1; pageNumber <= document.numPages; pageNumber += 1) {
+      const page = await document.getPage(pageNumber);
+      const textContent = await page.getTextContent();
+      const pageText = textContent.items
+        .map((item) => (typeof item.str === "string" ? item.str : ""))
+        .filter(Boolean)
+        .join(" ");
+
+      pageTexts.push(pageText);
+    }
+
+    return pageTexts.join("\n\n");
+  } finally {
+    await document.destroy();
+  }
+}
+
+async function extractPdfText(buffer: Buffer, fileName: string) {
+  const failures: string[] = [];
+
+  try {
+    const text = await extractPdfWithPdfParse(buffer);
+    console.info(`Resume PDF extracted with pdf-parse: ${fileName}, characters=${text.trim().length}`);
+    return text;
+  } catch (error) {
+    const message = getErrorMessage(error);
+    failures.push(`pdf-parse failed: ${message}`);
+    console.error(`Resume PDF pdf-parse failed for ${fileName}:`, error);
+  }
+
+  try {
+    const text = await extractPdfWithPdfJs(buffer);
+    console.info(`Resume PDF extracted with pdfjs-dist fallback: ${fileName}, characters=${text.trim().length}`);
+    return text;
+  } catch (error) {
+    const message = getErrorMessage(error);
+    failures.push(`pdfjs-dist fallback failed: ${message}`);
+    console.error(`Resume PDF pdfjs-dist fallback failed for ${fileName}:`, error);
+  }
+
+  throw new ResumeExtractionError(
+    "PDF text extraction failed.",
+    failures.join(" | "),
+  );
+}
+
 async function extractText(file: File) {
   const buffer = Buffer.from(await file.arrayBuffer());
   const lowerName = file.name.toLowerCase();
 
-  if (file.type === "application/pdf" || lowerName.endsWith(".pdf")) {
-    const { PDFParse } = await import("pdf-parse");
-    const parser = new PDFParse({ data: buffer });
+  console.info(`Resume upload received: name=${file.name}, type=${file.type || "unknown"}, bytes=${buffer.byteLength}`);
 
-    try {
-      const result = await parser.getText();
-      return result.text;
-    } finally {
-      await parser.destroy();
-    }
+  if (file.type === "application/pdf" || lowerName.endsWith(".pdf")) {
+    return extractPdfText(buffer, file.name);
   }
 
   if (
     file.type === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
     lowerName.endsWith(".docx")
   ) {
-    const result = await mammoth.extractRawText({ buffer });
-    return result.value;
+    try {
+      const result = await mammoth.extractRawText({ buffer });
+      console.info(`Resume DOCX extracted with mammoth: ${file.name}, characters=${result.value.trim().length}`);
+      return result.value;
+    } catch (error) {
+      console.error(`Resume DOCX extraction failed for ${file.name}:`, error);
+      throw new ResumeExtractionError("DOCX text extraction failed.", getErrorMessage(error));
+    }
   }
 
-  return buffer.toString("utf8");
+  try {
+    const text = buffer.toString("utf8");
+    console.info(`Resume TXT extracted: ${file.name}, characters=${text.trim().length}`);
+    return text;
+  } catch (error) {
+    console.error(`Resume TXT extraction failed for ${file.name}:`, error);
+    throw new ResumeExtractionError("TXT text extraction failed.", getErrorMessage(error));
+  }
 }
 
 function normalizeText(text: string) {
@@ -186,12 +302,31 @@ async function handlePost(request: NextRequest) {
 
   try {
     extractedText = normalizeText(await extractText(file));
-  } catch {
-    return errorResponse("Could not extract text from this resume. Try a text-based PDF, DOCX, or TXT file.", 422);
+  } catch (error) {
+    if (error instanceof ResumeExtractionError) {
+      console.error(`Resume extraction failed: ${error.message} ${error.detail}`);
+      return errorResponse(`${error.message} ${error.detail}`, 422);
+    }
+
+    const message = getErrorMessage(error);
+    console.error("Unexpected resume extraction failure:", error);
+    return errorResponse(`Resume text extraction failed: ${message}`, 422);
+  }
+
+  console.info(`Resume extracted text length after normalization: ${extractedText.length}`);
+
+  if (extractedText.length === 0) {
+    return errorResponse(
+      "No text was extracted from this file. The resume may be scanned, image-only, encrypted, or saved with text as vector outlines.",
+      422,
+    );
   }
 
   if (extractedText.length < MIN_TEXT_LENGTH) {
-    return errorResponse("The extracted resume text is too short for a useful ATS review.", 422);
+    return errorResponse(
+      `The extracted resume text is too short for a useful ATS review. Extracted ${extractedText.length} characters; at least ${MIN_TEXT_LENGTH} are required.`,
+      422,
+    );
   }
 
   const controller = new AbortController();
