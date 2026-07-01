@@ -65,39 +65,11 @@ async function extractPdfWithPdfParse(buffer: Buffer) {
   }
 }
 
-interface PdfJsTextItem {
-  str?: unknown;
-}
-
-interface PdfJsPage {
-  getTextContent: () => Promise<{ items: PdfJsTextItem[] }>;
-}
-
-interface PdfJsDocument {
-  numPages: number;
-  getPage: (pageNumber: number) => Promise<PdfJsPage>;
-  destroy: () => Promise<void>;
-}
-
-interface PdfJsLoadingTask {
-  promise: Promise<PdfJsDocument>;
-}
-
-interface PdfJsModule {
-  getDocument: (options: {
-    data: Uint8Array;
-    disableFontFace: boolean;
-    isEvalSupported: boolean;
-    useSystemFonts: boolean;
-  }) => PdfJsLoadingTask;
-}
-
 async function extractPdfWithPdfJs(buffer: Buffer) {
-  const pdfjs = (await import("pdfjs-dist/legacy/build/pdf.mjs")) as PdfJsModule;
+  const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
   const loadingTask = pdfjs.getDocument({
     data: new Uint8Array(buffer),
     disableFontFace: true,
-    isEvalSupported: false,
     useSystemFonts: true,
   });
   const document = await loadingTask.promise;
@@ -109,7 +81,7 @@ async function extractPdfWithPdfJs(buffer: Buffer) {
       const page = await document.getPage(pageNumber);
       const textContent = await page.getTextContent();
       const pageText = textContent.items
-        .map((item) => (typeof item.str === "string" ? item.str : ""))
+        .map((item) => ("str" in item ? item.str : ""))
         .filter(Boolean)
         .join(" ");
 
@@ -118,7 +90,7 @@ async function extractPdfWithPdfJs(buffer: Buffer) {
 
     return pageTexts.join("\n\n");
   } finally {
-    await document.destroy();
+    await loadingTask.destroy();
   }
 }
 
